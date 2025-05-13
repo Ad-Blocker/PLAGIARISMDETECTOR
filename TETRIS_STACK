@@ -1,0 +1,223 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#define COLS 10
+#define ROWS 20
+typedef struct {
+ char data[ROWS];
+ int top;
+} Stack;
+typedef struct {
+ Stack columns[COLS];
+ char grid[ROWS][COLS];
+ int score;
+ int game_over;
+} TetrisGame;
+typedef struct {
+ char shape[4][4];
+ int width;
+ int height;
+ char symbol;
+} Tetromino;
+Tetromino tetrominoes[] = {
+ // I
+29
+ {{
+ {'X', 'X', 'X', 'X'},
+ {' ', ' ', ' ', ' '},
+ {' ', ' ', ' ', ' '},
+ {' ', ' ', ' ', ' '}
+ }, 4, 1, 'I'},
+ //
+O
+ {{
+ {'X', 'X', ' ', ' '},
+ {'X', 'X', ' ', ' '},
+ {' ', ' ', ' ', ' '},
+ {' ', ' ', ' ', ' '}
+ }, 2, 2, 'O'},
+ //
+T
+ {{
+ {'X', 'X', 'X', ' '},
+ {' ', 'X', ' ', ' '},
+ {' ', ' ', ' ', ' '},
+ {' ', ' ', ' ', ' '}
+ }, 3, 2, 'T'},
+ //
+L
+ {{
+ {'X', ' ', ' ', ' '},
+ {'X', ' ', ' ', ' '},
+ {'X', 'X', ' ', ' '},
+ {' ', ' ', ' ', ' '}
+ }, 2, 3, 'L'},
+ //
+Z
+ {{
+ {'X', 'X', ' ', ' '},
+ {' ', 'X', 'X', ' '},
+ {' ', ' ', ' ', ' '},
+ {' ', ' ', ' ', ' '}
+ }, 3, 2, 'Z'}
+};void init_game(TetrisGame *game)
+{
+
+game->scor
+e
+= 0;
+
+game->game_o
+ver
+= 0;
+
+for (int
+i
+= 0;
+i
+<
+COLS; i++)
+game->columns[i].top
+= 0;
+
+for (int
+i
+= 0;
+i
+<
+R
+OWS; i++)
+
+for (int
+j
+= 0;
+j
+<
+COLS; j++)
+
+game->grid[i][j]
+= ' ';
+}
+30
+void update_grid(TetrisGame *game) {
+ for (int i = 0; i < ROWS; i++)
+ for (int j = 0; j < COLS; j++)
+ game->grid[i][j] = ' ';
+ for (int col = 0; col < COLS; col++) {
+ for (int h = 0; h < game->columns[col].top; h++) {
+ int row = ROWS - 1 - h;
+ game->grid[row][col] = game->columns[col].data[h];
+ }
+ }
+}
+void print_grid(TetrisGame *game) {
+ printf("\nScore: %d\n", game->score);
+ for (int i = 0; i < ROWS; i++) {
+ for (int j = 0; j < COLS; j++) {
+ printf("%c ", game->grid[i][j]);
+ }
+ printf("\n");
+ }
+ for (int j = 0; j < COLS; j++) printf("==");
+ printf("\n");
+ for (int j = 0; j < COLS; j++) printf("%d ", j);
+ printf("\n");
+}
+int can_place(TetrisGame *game, Tetromino *t, int start_col) {
+ if (start_col < 0 || start_col + t->width > COLS)
+ return 0;
+ int max_height = 0;
+ for (int i = 0; i < t->width; i++) {
+ if (game->columns[start_col + i].top > max_height)
+ max_height = game->columns[start_col + i].top;
+ }
+ if (max_height + t->height > ROWS)
+ return 0;
+ return 1;
+}
+void place_tetromino(TetrisGame *game, Tetromino *t, int start_col) {
+ int max_top = 0;
+ for (int i = 0; i < t->width; i++) {
+ if (game->columns[start_col + i].top > max_top)
+ max_top = game->columns[start_col + i].top;
+ }
+ int base_row = max_top;
+ for (int i = 0; i < t->height; i++) {
+31
+ for (int j = 0; j < t->width; j++) {
+ if (t->shape[i][j] == 'X') {
+ int col = start_col + j;
+ int row = base_row + i;
+ if (row >= ROWS) {
+ game->game_over = 1;
+ return;
+ }
+ game->columns[col].data[row] = t->symbol;
+ // Update top only if current position is beyond it
+ if (row + 1 > game->columns[col].top)
+ game->columns[col].top = row + 1;
+ }
+ }
+ }
+ update_grid(game);
+}
+void clear_full_rows(TetrisGame *game) {
+ int cleared = 0;
+ for (int i = ROWS - 1; i >= 0; i--) {
+ int full = 1;
+ for (int j = 0; j < COLS; j++) {
+ if (game->grid[i][j] == ' ') {
+ full = 0;
+ break;
+ }
+ }
+ if (full) {
+ cleared++;
+ for (int k = i; k > 0; k--)
+ for (int j = 0; j < COLS; j++)
+ game->grid[k][j] = game->grid[k - 1][j];
+ for (int j = 0; j < COLS; j++)
+ game->grid[0][j] = ' ';
+ i++; // Check same row again after shifting
+ }
+ }
+ if (cleared > 0) {
+ game->score += cleared * 100;
+ // Update stack tops
+ for (int col = 0; col < COLS; col++) {
+ Stack *s = &game->columns[col];
+ s->top = 0;
+ for (int row = ROWS - 1; row >= 0; row--) {
+32
+ if (game->grid[row][col] != ' ')
+ s->data[s->top++] = game->grid[row][col];
+ }
+ }
+ }
+}
+int main() {
+ srand(time(0));
+ TetrisGame game;
+ init_game(&game);
+ printf("🎮 Welcome to Tetris with Tetromino Shapes!\n");
+ print_grid(&game);
+ while (!game.game_over) {
+ int shape_index = rand() % 5;
+ Tetromino *t = &tetrominoes[shape_index];
+ printf("\nNext shape: %c (%dx%d)\n", t->symbol, t->width, t->height);
+ int col;
+ printf("Enter column (0 to %d) to place shape: ", COLS - t->width);
+ scanf("%d", &col);
+ if (!can_place(&game, t, col)) {
+ printf("❌ Can't place shape there. GAME OVER.\n");
+ game.game_over = 1;
+ break;
+ }
+ place_tetromino(&game, t, col);
+ clear_full_rows(&game);
+ print_grid(&game);
+ }
+ printf("\n🏁 Final Score: %d\n", game.score);
+ return 0;
+}
