@@ -1,0 +1,292 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <math.h>
+#define CRUISE_SPEED_KMPH 900.0f
+#define DEG_TO_KM_LAT 111.0f
+#define M_PI 3.14159265358979323846f
+// Define structure for a waypoint
+typedef struct Waypoint {
+ char name[50];
+ float latitude;
+45
+ float longitude;
+ int altitude;
+ int heading;
+ struct Waypoint* next;
+} Waypoint;
+Waypoint* currentWaypoint = NULL;
+float calculateDistance(float lat1, float lon1, float lat2,
+float lon2) {
+ float deltaLat = lat2 - lat1;
+ float deltaLon = lon2 - lon1;
+ float meanLat = (lat1 + lat2) / 2.0f;
+ float kmPerDegLon = DEG_TO_KM_LAT * cosf(meanLat * M_PI /
+180.0f);
+ float dx = deltaLon * kmPerDegLon;
+ float dy = deltaLat * DEG_TO_KM_LAT;
+ return sqrtf(dx * dx + dy * dy);
+}
+float calculateETA(float distance_km) {
+ return distance_km / CRUISE_SPEED_KMPH;
+}
+Waypoint* createWaypoint(const char* name, float latitude,
+float longitude, int altitude, int heading) {
+ Waypoint* newWaypoint =
+(Waypoint*)malloc(sizeof(Waypoint));
+ if (newWaypoint == NULL) {
+46
+ printf("Memory allocation failed\n");
+ return NULL;
+ }
+ strcpy_s(newWaypoint->name, sizeof(newWaypoint->name),
+name);
+ newWaypoint->latitude = latitude;
+ newWaypoint->longitude = longitude;
+ newWaypoint->altitude = altitude;
+ newWaypoint->heading = heading;
+ newWaypoint->next = NULL;
+ return newWaypoint;
+}
+void addWaypoint(Waypoint** head, const char* name, float
+latitude, float longitude, int altitude, int heading) {
+ Waypoint* newWaypoint = createWaypoint(name, latitude,
+longitude, altitude, heading);
+ if (*head == NULL) {
+ *head = newWaypoint;
+ currentWaypoint = *head;
+ }
+ else {
+ Waypoint* temp = *head;
+ while (temp->next != NULL) {
+ temp = temp->next;
+ }
+ temp->next = newWaypoint;
+ }
+}
+47
+void insertWaypoint(Waypoint** head, int position, const char*
+name, float latitude, float longitude, int altitude, int
+heading) {
+ Waypoint* newWaypoint = createWaypoint(name, latitude,
+longitude, altitude, heading);
+ if (position == 0) {
+ newWaypoint->next = *head;
+ *head = newWaypoint;
+ currentWaypoint = *head;
+ return;
+ }
+ Waypoint* temp = *head;
+ for (int i = 0; i < position - 1 && temp != NULL; i++) {
+ temp = temp->next;
+ }
+ if (temp == NULL) {
+ printf("Position out of range\n");
+ return;
+ }
+ newWaypoint->next = temp->next;
+ temp->next = newWaypoint;
+}
+void deleteWaypoint(Waypoint** head, const char* name) {
+ Waypoint* temp = *head;
+ Waypoint* prev = NULL;
+ if (temp != NULL && strcmp(temp->name, name) == 0) {
+ *head = temp->next;
+48
+ if (currentWaypoint == temp) currentWaypoint = *head;
+ free(temp);
+ return;
+ }
+ while (temp != NULL && strcmp(temp->name, name) != 0) {
+ prev = temp;
+ temp = temp->next;
+ }
+ if (temp == NULL) {
+ printf("Waypoint not found\n");
+ return;
+ }
+ if (currentWaypoint == temp) currentWaypoint = temp->next;
+ prev->next = temp->next;
+ free(temp);
+}
+void displayWaypoints(Waypoint* head) {
+ if (head == NULL) {
+ printf("No waypoints to display.\n");
+ return;
+ }
+ Waypoint* temp = head;
+ while (temp != NULL) {
+ printf("Waypoint: %s, Latitude: %.2f, Longitude: %.2f,
+Altitude: %d ft, Heading: %d°\n",
+ temp->name, temp->latitude, temp->longitude,
+temp->altitude, temp->heading);
+49
+ temp = temp->next;
+ }
+}
+void displayRemainingRoute(Waypoint* current) {
+ if (current == NULL) {
+ printf("No current waypoint set.\n");
+ return;
+ }
+ Waypoint* temp = current;
+ float totalDistance = 0.0f;
+ float totalETA = 0.0f;
+ while (temp != NULL && temp->next != NULL) {
+ float distance = calculateDistance(temp->latitude,
+temp->longitude, temp->next->latitude, temp->next->longitude);
+ float eta = calculateETA(distance);
+ totalDistance += distance;
+ totalETA += eta;
+ printf("To Waypoint: %s -> Distance: %.2f km, ETA:
+%.2f hrs\n",
+ temp->next->name, distance, eta);
+ temp = temp->next;
+ }
+ printf("\nTotal remaining distance: %.2f km, Total ETA:
+%.2f hrs\n", totalDistance, totalETA);
+}
+Waypoint* findWaypoint(Waypoint* head, const char* name) {
+ Waypoint* temp = head;
+50
+ while (temp != NULL) {
+ if (strcmp(temp->name, name) == 0) {
+ return temp;
+ }
+ temp = temp->next;
+ }
+ return NULL;
+}
+void directTo(Waypoint* head, const char* name) {
+ Waypoint* waypoint = findWaypoint(head, name);
+ if (waypoint != NULL && currentWaypoint != NULL) {
+ float distance =
+calculateDistance(currentWaypoint->latitude,
+currentWaypoint->longitude, waypoint->latitude,
+waypoint->longitude);
+ float eta = calculateETA(distance);
+ printf("Directing to waypoint %s. Altitude: %d ft,
+Heading: %d°, Distance: %.2f km, ETA: %.2f hrs\n",
+ waypoint->name, waypoint->altitude,
+waypoint->heading, distance, eta);
+ }
+ else {
+ printf("Waypoint %s not found or current position
+unknown.\n", name);
+ }
+}
+void traverseToNextWaypoint() {
+ if (currentWaypoint != NULL && currentWaypoint->next !=
+NULL) {
+51
+ currentWaypoint = currentWaypoint->next;
+ printf("Traversed to next waypoint: %s\n",
+currentWaypoint->name);
+ }
+ else {
+ printf("No further waypoints to traverse.\n");
+ }
+}
+void clearWaypoints(Waypoint** head) {
+ Waypoint* temp = *head;
+ while (temp != NULL) {
+ Waypoint* next = temp->next;
+ free(temp);
+ temp = next;
+ }
+ *head = NULL;
+ currentWaypoint = NULL;
+}
+int main() {
+ Waypoint* flightPlan = NULL;
+ int choice;
+ do {
+ printf("\nFlight Plan Menu:\n");
+ printf("1. Add Waypoint\n");
+ printf("2. Insert Waypoint\n");
+52
+ printf("3. Delete Waypoint\n");
+ printf("4. Display All Waypoints\n");
+ printf("5. Direct-To Waypoint\n");
+ printf("6. Traverse to Next Waypoint\n");
+ printf("7. Display Remaining Route\n");
+ printf("8. Clear All Waypoints\n");
+ printf("9. Exit\n");
+ printf("Enter your choice: ");
+ scanf_s("%d", &choice);
+ getchar();
+ char name[50];
+ float latitude, longitude;
+ int altitude, heading, position;
+ switch (choice) {
+ case 1:
+ printf("Enter waypoint name: ");
+ fgets(name, 50, stdin);
+ name[strcspn(name, "\n")] = '\0';
+ printf("Enter latitude: ");
+ scanf_s("%f", &latitude);
+ printf("Enter longitude: ");
+ scanf_s("%f", &longitude);
+ printf("Enter altitude (ft): ");
+ scanf_s("%d", &altitude);
+ printf("Enter heading (degrees): ");
+53
+ scanf_s("%d", &heading);
+ addWaypoint(&flightPlan, name, latitude, longitude,
+altitude, heading);
+ break;
+ case 2:
+ printf("Enter position to insert waypoint: ");
+ scanf_s("%d", &position);
+ getchar();
+ printf("Enter waypoint name: ");
+ fgets(name, 50, stdin);
+ name[strcspn(name, "\n")] = '\0';
+ printf("Enter latitude: ");
+ scanf_s("%f", &latitude);
+ printf("Enter longitude: ");
+ scanf_s("%f", &longitude);
+ printf("Enter altitude (ft): ");
+ scanf_s("%d", &altitude);
+ printf("Enter heading (degrees): ");
+ scanf_s("%d", &heading);
+ insertWaypoint(&flightPlan, position, name,
+latitude, longitude, altitude, heading);
+ break;
+ case 3:
+ printf("Enter waypoint name to delete: ");
+ fgets(name, 50, stdin);
+ name[strcspn(name, "\n")] = '\0';
+54
+ deleteWaypoint(&flightPlan, name);
+ break;
+ case 4:
+ displayWaypoints(flightPlan);
+ break;
+ case 5:
+ printf("Enter waypoint name to direct to: ");
+ fgets(name, 50, stdin);
+ name[strcspn(name, "\n")] = '\0';
+ directTo(flightPlan, name);
+ break;
+ case 6:
+ traverseToNextWaypoint();
+ break;
+ case 7:
+ displayRemainingRoute(currentWaypoint);
+ break;
+ case 8:
+ clearWaypoints(&flightPlan);
+ printf("All waypoints cleared.\n");
+ break;
+55
+ case 9:
+ printf("Exiting the program.\n");
+ break;
+ default:
+ printf("Invalid choice. Please try again.\n");
+ }
+ } while (choice != 9);
+ clearWaypoints(&flightPlan);
+ return 0;
+}
