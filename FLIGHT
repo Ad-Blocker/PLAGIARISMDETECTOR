@@ -9,7 +9,7 @@
 typedef struct Waypoint {
  char name[50];
  float latitude;
-45
+
  float longitude;
  int altitude;
  int heading;
@@ -35,7 +35,7 @@ float longitude, int altitude, int heading) {
  Waypoint* newWaypoint =
 (Waypoint*)malloc(sizeof(Waypoint));
  if (newWaypoint == NULL) {
-46
+
  printf("Memory allocation failed\n");
  return NULL;
  }
@@ -64,7 +64,7 @@ longitude, altitude, heading);
  temp->next = newWaypoint;
  }
 }
-47
+
 void insertWaypoint(Waypoint** head, int position, const char*
 name, float latitude, float longitude, int altitude, int
 heading) {
@@ -92,7 +92,7 @@ void deleteWaypoint(Waypoint** head, const char* name) {
  Waypoint* prev = NULL;
  if (temp != NULL && strcmp(temp->name, name) == 0) {
  *head = temp->next;
-48
+
  if (currentWaypoint == temp) currentWaypoint = *head;
  free(temp);
  return;
@@ -120,7 +120,7 @@ void displayWaypoints(Waypoint* head) {
 Altitude: %d ft, Heading: %d°\n",
  temp->name, temp->latitude, temp->longitude,
 temp->altitude, temp->heading);
-49
+
  temp = temp->next;
  }
 }
@@ -148,7 +148,7 @@ temp->longitude, temp->next->latitude, temp->next->longitude);
 }
 Waypoint* findWaypoint(Waypoint* head, const char* name) {
  Waypoint* temp = head;
-50
+
  while (temp != NULL) {
  if (strcmp(temp->name, name) == 0) {
  return temp;
@@ -178,7 +178,7 @@ unknown.\n", name);
 void traverseToNextWaypoint() {
  if (currentWaypoint != NULL && currentWaypoint->next !=
 NULL) {
-51
+
  currentWaypoint = currentWaypoint->next;
  printf("Traversed to next waypoint: %s\n",
 currentWaypoint->name);
@@ -204,7 +204,7 @@ int main() {
  printf("\nFlight Plan Menu:\n");
  printf("1. Add Waypoint\n");
  printf("2. Insert Waypoint\n");
-52
+
  printf("3. Delete Waypoint\n");
  printf("4. Display All Waypoints\n");
  printf("5. Direct-To Waypoint\n");
@@ -230,7 +230,7 @@ int main() {
  printf("Enter altitude (ft): ");
  scanf_s("%d", &altitude);
  printf("Enter heading (degrees): ");
-53
+
  scanf_s("%d", &heading);
  addWaypoint(&flightPlan, name, latitude, longitude,
 altitude, heading);
@@ -257,7 +257,7 @@ latitude, longitude, altitude, heading);
  printf("Enter waypoint name to delete: ");
  fgets(name, 50, stdin);
  name[strcspn(name, "\n")] = '\0';
-54
+
  deleteWaypoint(&flightPlan, name);
  break;
  case 4:
@@ -279,7 +279,7 @@ latitude, longitude, altitude, heading);
  clearWaypoints(&flightPlan);
  printf("All waypoints cleared.\n");
  break;
-55
+
  case 9:
  printf("Exiting the program.\n");
  break;
