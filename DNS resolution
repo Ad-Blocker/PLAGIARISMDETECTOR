@@ -1,0 +1,262 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netdb.h>
+#include <arpa/inet.h>
+#include <stdbool.h>
+#include <unistd.h>
+23
+#define TABLE_SIZE 100
+#define MAX_DOMAIN_LENGTH 256
+#define MAX_IP_LENGTH 16
+// Structure for DNS cache entry
+typedef struct DNSCacheEntry {
+ char domain[MAX_DOMAIN_LENGTH];
+ char ip[MAX_IP_LENGTH];
+ struct DNSCacheEntry* next;
+ time_t timestamp; // For TTL implementation if needed
+} DNSCacheEntry;
+// Hash table structure
+typedef struct {
+ DNSCacheEntry* table[TABLE_SIZE];
+ int cache_hits;
+ int cache_misses;
+} DNSCache;
+// Function to create a hash value for a domain name
+unsigned int hash(const char* domain) {
+ unsigned int hash_value = 0;
+
+ // DJB2 hash algorithm - generally better distribution than simple sum
+ hash_value = 5381;
+ int c;
+ while ((c = *domain++)) {
+ hash_value = ((hash_value << 5) + hash_value) + c; // hash * 33 + c
+ }
+
+ return hash_value % TABLE_SIZE;
+}
+// Function to initialize the DNS cache
+DNSCache* initDNSCache() {
+ DNSCache* dns_cache = (DNSCache*)malloc(sizeof(DNSCache));
+
+ if (dns_cache == NULL) {
+ printf("Memory allocation failed for DNS cache\n");
+ exit(1);
+ }
+
+ // Initialize all buckets to NULL
+ for (int i = 0; i < TABLE_SIZE; i++) {
+ dns_cache->table[i] = NULL;
+ }
+
+ dns_cache->cache_hits = 0;
+24
+ dns_cache->cache_misses = 0;
+
+ return dns_cache;
+}
+// Function to add a DNS record to the cache
+void addDNSCacheEntry(DNSCache* dns_cache, const char* domain, const char* ip) {
+ // Compute the hash value for the domain
+ unsigned int index = hash(domain);
+
+ // Create a new DNS cache entry
+ DNSCacheEntry* new_entry = (DNSCacheEntry*)malloc(sizeof(DNSCacheEntry));
+
+ if (new_entry == NULL) {
+ printf("Memory allocation failed for DNS cache entry\n");
+ return;
+ }
+
+ // Initialize the new entry
+ strncpy(new_entry->domain, domain, MAX_DOMAIN_LENGTH - 1);
+ new_entry->domain[MAX_DOMAIN_LENGTH - 1] = '\0';
+
+ strncpy(new_entry->ip, ip, MAX_IP_LENGTH - 1);
+ new_entry->ip[MAX_IP_LENGTH - 1] = '\0';
+
+ new_entry->timestamp = time(NULL);
+ new_entry->next = NULL;
+
+ // If the bucket is empty, add the entry
+ if (dns_cache->table[index] == NULL) {
+ dns_cache->table[index] = new_entry;
+ } else {
+ // Check if domain already exists
+ DNSCacheEntry* current = dns_cache->table[index];
+ DNSCacheEntry* prev = NULL;
+
+ while (current != NULL) {
+ if (strcmp(current->domain, domain) == 0) {
+ // Domain exists, update IP
+ strncpy(current->ip, ip, MAX_IP_LENGTH - 1);
+ current->ip[MAX_IP_LENGTH - 1] = '\0';
+ current->timestamp = time(NULL);
+ // Free the new entry as we don't need it
+ free(new_entry);
+ return;
+ }
+ prev = current;
+ current = current->next;
+25
+ }
+
+ // Domain doesn't exist, add to the end of the list
+ if (prev != NULL) {
+ prev->next = new_entry;
+ }
+ }
+}
+// Function to look up an IP address in the cache
+const char* lookupDNSCache(DNSCache* dns_cache, const char* domain) {
+ // Compute the hash value for the domain
+ unsigned int index = hash(domain);
+
+ // Look for the domain in the bucket
+ DNSCacheEntry* current = dns_cache->table[index];
+
+ while (current != NULL) {
+ if (strcmp(current->domain, domain) == 0) {
+ dns_cache->cache_hits++;
+ return current->ip;
+ }
+ current = current->next;
+ }
+
+ // Domain not found in cache
+ dns_cache->cache_misses++;
+ return NULL;
+}
+// Function to resolve domain name to IP address
+const char* resolveDomain(DNSCache* dns_cache, const char* domain) {
+ // First, check if the domain is in our cache
+ const char* cached_ip = lookupDNSCache(dns_cache, domain);
+
+ if (cached_ip != NULL) {
+ printf("Cache HIT: %s -> %s\n", domain, cached_ip);
+ return cached_ip;
+ }
+
+ printf("Cache MISS: %s - Resolving...\n", domain);
+
+ // If not in cache, perform actual DNS resolution
+ struct addrinfo hints, *res;
+ char ip_str[MAX_IP_LENGTH];
+
+ memset(&hints, 0, sizeof(hints));
+ hints.ai_family = AF_INET; // IPv4
+ hints.ai_socktype = SOCK_STREAM;
+26
+
+ int status = getaddrinfo(domain, NULL, &hints, &res);
+
+ if (status != 0) {
+ printf("DNS resolution failed: %s\n", gai_strerror(status));
+ return NULL;
+ }
+
+ // Convert the IP address to a string
+ void* addr;
+ struct sockaddr_in* ipv4 = (struct sockaddr_in*)res->ai_addr;
+ addr = &(ipv4->sin_addr);
+
+ inet_ntop(res->ai_family, addr, ip_str, MAX_IP_LENGTH);
+
+ // Add the resolved IP to our cache
+ addDNSCacheEntry(dns_cache, domain, ip_str);
+ printf("Resolved and cached: %s -> %s\n", domain, ip_str);
+
+ freeaddrinfo(res);
+
+ // Return the IP from the cache
+ return lookupDNSCache(dns_cache, domain);
+}
+// Function to free all memory used by the DNS cache
+void freeDNSCache(DNSCache* dns_cache) {
+ for (int i = 0; i < TABLE_SIZE; i++) {
+ DNSCacheEntry* current = dns_cache->table[i];
+
+ while (current != NULL) {
+ DNSCacheEntry* next = current->next;
+ free(current);
+ current = next;
+ }
+ }
+
+ free(dns_cache);
+ printf("DNS cache freed\n");
+}
+// Function to print cache statistics
+void printCacheStats(DNSCache* dns_cache) {
+ int total_requests = dns_cache->cache_hits + dns_cache->cache_misses;
+ float hit_rate = 0.0;
+
+ if (total_requests > 0) {
+ hit_rate = (float)dns_cache->cache_hits / total_requests * 100;
+ }
+27
+
+ printf("\n----- Cache Statistics -----\n");
+ printf("Total lookups: %d\n", total_requests);
+ printf("Cache hits: %d\n", dns_cache->cache_hits);
+ printf("Cache misses: %d\n", dns_cache->cache_misses);
+ printf("Hit rate: %.2f%%\n", hit_rate);
+ printf("---------------------------\n\n");
+}
+// Function to print all entries in the DNS cache
+void printDNSCache(DNSCache* dns_cache) {
+ printf("\n----- DNS Cache Contents -----\n");
+ int total_entries = 0;
+
+ for (int i = 0; i < TABLE_SIZE; i++) {
+ DNSCacheEntry* current = dns_cache->table[i];
+
+ while (current != NULL) {
+ printf("Domain: %-30s IP: %s\n", current->domain, current->ip);
+ total_entries++;
+ current = current->next;
+ }
+ }
+
+ printf("Total cached entries: %d\n", total_entries);
+ printf("-----------------------------\n\n");
+}
+int main() {
+ // Initialize the DNS cache
+ DNSCache* dns_cache = initDNSCache();
+ char domain[MAX_DOMAIN_LENGTH];
+ char choice;
+
+ printf("DNS Resolver with Cache (using Hash Table)\n");
+ printf("------------------------------------------\n\n");
+
+ do {
+ printf("Enter a domain name to resolve (e.g., www.google.com): ");
+ scanf("%255s", domain);
+
+ // Resolve the domain
+ const char* ip = resolveDomain(dns_cache, domain);
+
+ if (ip != NULL) {
+ printf("Final result: %s -> %s\n\n", domain, ip);
+ } else {
+ printf("Could not resolve %s\n\n", domain);
+ }
+28
+
+ // Ask if the user wants to continue
+ printf("Do you want to resolve another domain? (y/n): ");
+ scanf(" %c", &choice);
+ printf("\n");
+
+ } while (choice == 'y' || choice == 'Y');
+
+ // Print cache statistics and contents
+ printCacheStats(dns_cache);
+ printDNSCache(dns_cache);
+
+ // Free the DNS cache
+ freeDNSCache(dns_cache);
+
+ return 0;
+}
