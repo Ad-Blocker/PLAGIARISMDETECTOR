@@ -1,0 +1,114 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#define MAX_WORD_LEN 32
+#define MAX_LINE_LEN 1024
+#define PHRASE_LEN 3
+typedef struct TrieNode {
+ int is_end;
+ struct TrieNode *children[256];
+} TrieNode;
+TrieNode* createNode() {
+ TrieNode* node = (TrieNode*)malloc(sizeof(TrieNode));
+ node->is_end = 0;
+ for (int i = 0; i < 256; i++) node->children[i] = NULL;
+ return node;
+}
+void insert(TrieNode* root, char* phrase) {
+ TrieNode* curr = root;
+ for (int i = 0; phrase[i]; i++) {
+ unsigned char c = (unsigned char)phrase[i];
+ if (!curr->children[c])
+ curr->children[c] = createNode();
+ curr = curr->children[c];
+ }
+ curr->is_end = 1;
+}
+int search(TrieNode* root, char* phrase) {
+ TrieNode* curr = root;
+ for (int i = 0; phrase[i]; i++) {
+ unsigned char c = (unsigned char)phrase[i];
+ if (!curr->children[c])
+ return 0;
+ curr = curr->children[c];
+ }
+ return curr->is_end;
+}
+void sanitize(char* word) {
+ int j = 0;
+ for (int i = 0; word[i]; i++) {
+ if (isalnum(word[i])) {
+ word[j++] = tolower(word[i]);
+ }
+21
+ }
+ word[j] = '\0';
+}
+int tokenize(char* sentence, char words[][MAX_WORD_LEN]) {
+ int count = 0;
+ char* token = strtok(sentence, " ");
+ while (token && count < 1000) {
+ sanitize(token);
+ if (strlen(token) > 0) {
+ strncpy(words[count++], token, MAX_WORD_LEN);
+ }
+ token = strtok(NULL, " ");
+ }
+ return count;
+}
+void buildPhrases(char words[][MAX_WORD_LEN], int word_count, char
+phrases[][MAX_LINE_LEN], int* phrase_count) {
+ *phrase_count = 0;
+ for (int i = 0; i <= word_count - PHRASE_LEN; i++) {
+ snprintf(phrases[*phrase_count], MAX_LINE_LEN, "%s %s %s", words[i],
+words[i+1], words[i+2]);
+ (*phrase_count)++;
+ }
+}
+void readFile(const char* filename, char* buffer) {
+ FILE* fp = fopen(filename, "r");
+ if (!fp) {
+ perror("File read error");
+ exit(1);
+ }
+ size_t len = fread(buffer, 1, 10000, fp);
+ buffer[len] = '\0';
+ fclose(fp);
+}
+int main() {
+ char baseText[10000];
+ char testText[10000];
+ char words[1000][MAX_WORD_LEN];
+ char phrases[1000][MAX_LINE_LEN];
+ int phrase_count = 0, matched = 0;
+ char baseFile[100], testFile[100];
+ printf("Enter the path to the original file: ");
+ scanf("%s", baseFile);
+ printf("Enter the path to the test file: ");
+22
+ scanf("%s", testFile);
+ TrieNode* root = createNode();
+ readFile(baseFile, baseText);
+ readFile(testFile, testText);
+ int word_count = tokenize(baseText, words);
+ buildPhrases(words, word_count, phrases, &phrase_count);
+ for (int i = 0; i < phrase_count; i++)
+ insert(root, phrases[i]);
+ int test_phrase_count = 0;
+ int test_word_count = tokenize(testText, words);
+ buildPhrases(words, test_word_count, phrases, &test_phrase_count);
+ for (int i = 0; i < test_phrase_count; i++) {
+ if (search(root, phrases[i])) matched++;
+ }
+ float percent = (float)matched / test_phrase_count * 100.0;
+ printf("\n=== Plagiarism Report ===\n");
+ printf("Total Phrases Checked: %d\n", test_phrase_count);
+ printf("Matched Phrases: %d\n", matched);
+ printf("Plagiarism Percentage: %.2f%%\n", percent);
+ if (percent > 30.0)
+ printf("⚠️ Plagiarism Suspected!\n");
+ else
+ printf("✅ Likely Original Work.\n");
+ return 0;
+}
