@@ -1,0 +1,312 @@
+#include <stdio.h>
+#include <string.h>
+#define MAX_ITEMS 100
+33
+#define MAX_ORDERS 100
+// Structure to represent an item in the warehouse
+typedef struct {
+int itemID;
+char itemName[30];
+int quantity;
+} Item;
+// Queue structure to store items (FIFO)
+typedef struct {
+Item items[MAX_ITEMS];
+int front, rear;
+} Queue;
+// Structure to represent an order
+typedef struct {
+int orderID;
+int itemID;
+int quantity;
+} Order;
+// Queue structure to store orders (FIFO)
+typedef struct {
+Order orders[MAX_ORDERS];
+int front, rear;
+} OrderQueue;
+34
+// Function to initialize a warehouse queue
+void initializeQueue(Queue* q) {
+q->front = 0;
+q->rear = 0;
+}
+// Function to initialize an order queue
+void initializeOrderQueue(OrderQueue* oq) {
+oq->front = 0;
+oq->rear = 0;
+}
+// Enqueue an item (Add item to warehouse)
+void enqueue(Queue* q, Item item) {
+if (q->rear < MAX_ITEMS) {
+q->items[q->rear++] = item;
+printf("Item '%s' added to the warehouse.\n", item.itemName);
+} else {
+printf("Warehouse is full.\n");
+}
+}
+// Dequeue an item (Remove item from warehouse)
+Item dequeue(Queue* q) {
+if (q->front == q->rear) {
+printf("Warehouse is empty.\n");
+Item empty = {0};
+return empty;
+35
+}
+return q->items[q->front++];
+}
+// Enqueue an order (Add order to order queue)
+void enqueueOrder(OrderQueue* oq, Order order) {
+if (oq->rear < MAX_ORDERS) {
+oq->orders[oq->rear++] = order;
+printf("Order #%d added to the queue.\n", order.orderID);
+} else {
+printf("Order queue is full.\n");
+}
+}
+// Dequeue an order (Fulfill order)
+Order dequeueOrder(OrderQueue* oq) {
+if (oq->front == oq->rear) {
+printf("No orders to fulfill.\n");
+Order empty = {0};
+return empty;
+}
+return oq->orders[oq->front++];
+}
+// Display all items in the warehouse
+void displayWarehouse(Queue* q) {
+if (q->front == q->rear) {
+printf("Warehouse is empty.\n");
+36
+} else {
+printf("Warehouse Inventory:\n");
+for (int i = q->front; i < q->rear; i++) {
+printf("ID: %d, Name: %s, Quantity: %d\n", q->items[i].itemID,
+q->items[i].itemName, q->items[i].quantity);
+}
+}
+}
+// Search for an item by ID
+void searchItemByID(Queue* q, int id) {
+for (int i = q->front; i < q->rear; i++) {
+if (q->items[i].itemID == id) {
+printf("Item found: '%s' (ID: %d, Quantity: %d)\n",
+q->items[i].itemName, q->items[i].itemID, q->items[i].quantity);
+return;
+}
+}
+printf("Item with ID %d not found.\n", id);
+}
+// Check for low stock items
+void checkLowStock(Queue* q, int threshold) {
+for (int i = q->front; i < q->rear; i++) {
+if (q->items[i].quantity <= threshold) {
+printf("Warning: Low stock for '%s' (ID: %d, Quantity: %d)\n",
+q->items[i].itemName, q->items[i].itemID, q->items[i].quantity);
+}
+}
+37
+}
+// Update the quantity of an existing item
+void updateItemQuantity(Queue* q, int id, int newQuantity) {
+for (int i = q->front; i < q->rear; i++) {
+if (q->items[i].itemID == id) {
+q->items[i].quantity = newQuantity;
+printf("Quantity of '%s' updated to %d.\n",
+q->items[i].itemName, newQuantity);
+return;
+}
+}
+printf("Item with ID %d not found.\n", id);
+}
+// Sort items by quantity (Bubble sort)
+void sortWarehouse(Queue* q, int mode) {
+for (int i = q->front; i < q->rear - 1; i++) {
+for (int j = i + 1; j < q->rear; j++) {
+int swap = 0;
+if (mode == 1 && q->items[i].itemID > q->items[j].itemID) {
+swap = 1;
+} else if (mode == 2 && q->items[i].quantity >
+q->items[j].quantity) {
+swap = 1;
+}
+if (swap) {
+Item temp = q->items[i];
+38
+q->items[i] = q->items[j];
+q->items[j] = temp;
+}
+}
+}
+if (mode == 1)
+printf("✅ Sorted warehouse by Item ID.\n");
+else if (mode == 2)
+printf("✅ Sorted warehouse by Quantity.\n");
+else
+printf("⚠️ Unknown sort mode.\n");
+}
+void fulfillOrder(Queue* warehouse, OrderQueue* oq) {
+if (oq->front == oq->rear) {
+printf("No orders to fulfill.\n");
+return;
+}
+Order order = dequeueOrder(oq);
+int found = 0;
+for (int i = warehouse->front; i < warehouse->rear; i++) {
+if (warehouse->items[i].itemID == order.itemID) {
+found = 1;
+if (warehouse->items[i].quantity >= order.quantity) {
+warehouse->items[i].quantity -= order.quantity;
+39
+printf("✅ Order #%d fulfilled: %d units of '%s'.\n",
+order.orderID, order.quantity, warehouse->items[i].itemName);
+} else {
+printf("❌ Cannot fulfill Order #%d: Insufficient stock for item
+'%s' (Available: %d, Requested: %d).\n",
+order.orderID,
+warehouse->items[i].itemName,
+warehouse->items[i].quantity,
+order.quantity);
+}
+break;
+}
+}
+if (!found) {
+printf("❌ Cannot fulfill Order #%d: Item with ID %d not found in
+warehouse.\n", order.orderID, order.itemID);
+}
+}
+int isDuplicateItem(Queue* q, int id, char* name) {
+for (int i = q->front; i < q->rear; i++) {
+if (q->items[i].itemID == id || strcmp(q->items[i].itemName, name) ==
+0) {
+return 1; // Duplicate found
+}
+}
+return 0; // No duplicate
+}
+40
+// Display a menu for user interaction
+void displayMenu() {
+printf("\nWarehouse Management System\n");
+printf("1. Add Item\n");
+printf("2. Remove Item\n");
+printf("3. Display Warehouse\n");
+printf("4. Search Item\n");
+printf("5. Update Quantity\n");
+printf("6. Check Low Stock\n");
+printf("7. Sort Warehouse \n");
+printf("8. Process Order\n");
+printf("9. Fulfill Next Order\n");
+printf("10. Exit \n");
+}
+int main() {
+Queue warehouse;
+OrderQueue orderQueue;
+initializeQueue(&warehouse);
+initializeOrderQueue(&orderQueue);
+Item item1 = {1, "Laptop", 10};
+Item item2 = {2, "Smartphone", 20};
+Item item3 = {3, "Headphones", 15};
+enqueue(&warehouse, item1);
+enqueue(&warehouse, item2);
+enqueue(&warehouse, item3);
+41
+int choice;
+while (1) {
+displayMenu();
+printf("Enter your choice: ");
+scanf("%d", &choice);
+switch (choice) {
+case 1: {
+// Add item
+Item newItem;
+printf("Enter item ID: ");
+scanf("%d", &newItem.itemID);
+printf("Enter item name: ");
+scanf("%s", newItem.itemName);
+printf("Enter quantity: ");
+scanf("%d", &newItem.quantity);
+if (isDuplicateItem(&warehouse, newItem.itemID,
+newItem.itemName)) {
+printf("❌ Item with ID %d or name '%s' already exists.
+Duplicate not added.\n", newItem.itemID, newItem.itemName);
+} else {
+enqueue(&warehouse, newItem);
+}
+break;
+}
+case 2: {
+// Remove item
+Item removedItem = dequeue(&warehouse);
+42
+printf("Removed item: %s\n", removedItem.itemName);
+break;
+}
+case 3: {
+// Display warehouse
+displayWarehouse(&warehouse);
+break;
+}
+case 4: {
+// Search item by ID
+int id;
+printf("Enter item ID to search: ");
+scanf("%d", &id);
+searchItemByID(&warehouse, id);
+break;
+}
+case 5: {
+// Update item quantity
+int id, newQuantity;
+printf("Enter item ID to update: ");
+scanf("%d", &id);
+printf("Enter new quantity: ");
+scanf("%d", &newQuantity);
+updateItemQuantity(&warehouse, id, newQuantity);
+break;
+}
+case 6: {
+// Check for low stock
+43
+int threshold;
+printf("Enter low stock threshold: ");
+scanf("%d", &threshold);
+checkLowStock(&warehouse, threshold);
+break;
+}
+case 7: {
+int sortOption;
+printf("Sort by:\n1. Item ID\n2. Quantity\nEnter choice: ");
+scanf("%d", &sortOption);
+sortWarehouse(&warehouse, sortOption);
+break;
+}
+case 8: {
+// Process order
+Order order;
+printf("Enter order ID: ");
+scanf("%d", &order.orderID);
+printf("Enter item ID: ");
+scanf("%d", &order.itemID);
+printf("Enter quantity: ");
+scanf("%d", &order.quantity);
+enqueueOrder(&orderQueue, order);
+break;
+}
+case 9: {
+fulfillOrder(&warehouse, &orderQueue);
+break;
+44
+}
+case 10: {
+// Exit
+printf("Exiting system...\n");
+return 0;
+}
+default:
+printf("Invalid choice, please try again.\n");
+}
+}
+return 0;
+}
